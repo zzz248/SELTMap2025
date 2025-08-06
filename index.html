@@ -3,11 +3,109 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>US Legislative Map</title>
+  <title>US Legislative Activity Map</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
+    integrity="sha512-xwE/XYg7Cijv3gFf8zGf4u5z7mYQ06ntoY8bKCOGzTsznRfjFYwAAc41Z1YFZqD4HukTPT/oGp1MGz1n9mtT+Q=="
+    crossorigin=""
+  />
+  <style>
+    #map {
+      height: 90vh;
+      width: 100%;
+    }
+    body {
+      font-family: sans-serif;
+      margin: 0;
+    }
+    .dropdown {
+      padding: 1em;
+    }
+  </style>
 </head>
 <body>
-  <h1>🗺️ Legislative Activity Map</h1>
-  <p>If you're seeing this message, the file loaded successfully.</p>
+  <div class="dropdown">
+    <label for="yearSelect">Select Year:</label>
+    <select id="yearSelect"></select>
+  </div>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+  <script>
+    const map = L.map("map").setView([37.8, -96], 4);
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 6,
+      minZoom: 4,
+    }).addTo(map);
+
+    let stateData = {};
+    let geojson;
+
+    fetch("popup_summary_by_state_and_year.json")
+      .then((res) => res.json())
+      .then((data) => {
+        stateData = {};
+        data.forEach((entry) => {
+          const key = entry.State + "-" + entry.Year;
+          stateData[key] = entry;
+        });
+
+        loadMap();
+      });
+
+    function loadMap() {
+      fetch("https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json")
+        .then((res) => res.json())
+        .then((geoData) => {
+          geojson = L.geoJson(geoData, {
+            style: {
+              color: "#000",
+              weight: 1,
+              fillColor: "#e0e0e0",
+              fillOpacity: 0.7,
+            },
+            onEachFeature: (feature, layer) => {
+              layer.on({
+                click: () => {
+                  const state = feature.properties.name;
+                  const year = document.getElementById("yearSelect").value;
+                  const key = state + "-" + year;
+                  const entry = stateData[key];
+
+                  let content = "<strong>" + state + " – " + year + "</strong><br/>";
+
+                  if (entry) {
+                    content += "<br/><strong>Activity:</strong> " + (entry.EmojiActivity || "⚪ No activity");
+                    if (entry.AvailableForms) {
+                      content += "<br/><strong>Available Forms:</strong> " + entry.AvailableForms;
+                    }
+                    content += `<br/><br/><a href="${state.toLowerCase().replace(/ /g, "-")}.html" target="_blank">View Full Legislative History</a>`;
+                  } else {
+                    content += "<br/>No data available.";
+                  }
+
+                  layer.bindPopup(content).openPopup();
+                },
+              });
+            },
+          }).addTo(map);
+
+          populateYearDropdown();
+        });
+    }
+
+    function populateYearDropdown() {
+      const select = document.getElementById("yearSelect");
+      for (let y = 2009; y <= 2024; y++) {
+        const option = document.createElement("option");
+        option.value = y;
+        option.textContent = y;
+        select.appendChild(option);
+      }
+    }
+  </script>
 </body>
 </html>
