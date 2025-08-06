@@ -32,8 +32,7 @@
         attribution: '© OpenStreetMap'
       }).addTo(map);
 
-      fetch("https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json")
-        .then(res => res.json())
+fetch("us-states.json")        .then(res => res.json())
         .then(data => {
           L.geoJson(data, {
             onEachFeature: function (feature, layer) {
