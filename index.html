@@ -102,12 +102,10 @@
 
     yearSelect.addEventListener('change', resetMap);
 
-fetch("https://zzz248.github.io/SELTMap2025/popup_summary_by_state_and_year.json")
+    fetch("https://zzz248.github.io/SELTMap2025/popup_summary_by_state_and_year.json")
       .then(function(res) { return res.json(); })
       .then(function(data) {
         for (var i = 0; i < data.length; i++) {
-          var entry = data[i];
-          if (!entry || !entry.year || !entry.abbreviation) continue;
           var entry = data[i];
           var abbr = entry.abbreviation;
           var year = entry.year.toString();
