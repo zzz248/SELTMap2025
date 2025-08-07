@@ -74,6 +74,24 @@ const match = popupData.find(item => item.State === stateAbbr && item.Year === y
             }).addTo(map);
         }
 
+        function onEachFeature(feature, layer) {
+  layer.on({
+    click: function (e) {
+      console.log("You clicked a state");
+      const stateAbbr = feature.properties.abbr || feature.properties.STATE_ABBR || feature.properties.postal || feature.properties.name;
+      const popupContent = getPopupContent(stateAbbr, selectedYear);
+      layer.bindPopup(popupContent).openPopup();
+    }
+  });
+}
+        function renderMap(geojson, popupEntries) {
+  L.geoJson(geojson, {
+    style: styleFeature,
+    onEachFeature: onEachFeature
+  }).addTo(map);
+
+  console.log("✅ Map rendered");
+}
         function loadData() {
             Promise.all([
                 fetch("us-states.json").then(res => res.json()),
@@ -95,3 +113,4 @@ const match = popupData.find(item => item.State === stateAbbr && item.Year === y
 </body>
 </html>
 Fix popup data matching logic
+restore onEachFeature + renderMap
