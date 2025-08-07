@@ -1,161 +1,117 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <title>🗺️ Legislative Activity Map</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
-    html, body, #map {
-      height: 100%;
+    body {
       margin: 0;
-      font-family: Arial, sans-serif;
+      font-family: sans-serif;
     }
-    .year-select {
+    #map {
+      height: 100vh;
+    }
+    .dropdown {
       position: absolute;
       top: 10px;
-      left: 50px;
+      left: 10px;
       z-index: 1000;
       background: white;
-      padding: 5px;
+      padding: 6px;
       border-radius: 4px;
     }
-    .emoji-label {
-      font-size: 20px;
-      text-align: center;
+    .emoji-overlay {
+      font-size: 18px;
+      pointer-events: none;
     }
   </style>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
 </head>
 <body>
-  <div class="year-select">
-    <label for="year">Year:</label>
-    <select id="year"></select>
+  <div class="dropdown">
+    <label for="yearSelect">Select Year:</label>
+    <select id="yearSelect"></select>
   </div>
   <div id="map"></div>
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     const map = L.map('map').setView([37.8, -96], 4);
+
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 6,
-      minZoom: 3
+      attribution: '© OpenStreetMap contributors'
     }).addTo(map);
 
     let geojson;
-    let popupDataMap = {};
-    let emojiMarkers = [];
-    let availableYears = [];
+    let popupData = [];
+    let emojiLayer;
 
-    function getColor() {
-      return '#e0e0e0'; // neutral gray
+    const yearSelect = document.getElementById('yearSelect');
+    for (let y = 2009; y <= 2024; y++) {
+      const option = document.createElement('option');
+      option.value = y;
+      option.textContent = y;
+      yearSelect.appendChild(option);
     }
 
-    function style(feature) {
-      return {
-        fillColor: getColor(),
-        weight: 1,
-        opacity: 1,
-        color: 'white',
-        dashArray: '3',
-        fillOpacity: 0.7
-      };
-    }
+    yearSelect.addEventListener('change', () => {
+      updateMap(yearSelect.value);
+    });
 
-    function clearEmojiMarkers() {
-      emojiMarkers.forEach(marker => map.removeLayer(marker));
-      emojiMarkers = [];
-    }
+    function updateMap(selectedYear) {
+      if (emojiLayer) {
+        emojiLayer.clearLayers();
+      }
+      emojiLayer = L.layerGroup().addTo(map);
 
-    function updateMapForYear(year) {
-      clearEmojiMarkers();
       geojson.eachLayer(layer => {
-        const abbr = layer.feature.properties.STATE_ABBR || layer.feature.properties.postal;
-        const key = `${abbr}-${year}`;
-        const entry = popupDataMap[key];
+        const abbr = layer.feature.properties.postal;
+        const popupEntries = popupData.filter(p => p.State === abbr && p.Year.toString() === selectedYear);
 
-        // Set popup
-        let popupContent = `<strong>${layer.feature.properties.name} – ${year}</strong><br/>`;
-        if (entry) {
-          popupContent += `Activity: ${entry.EmojiActivity}<br/>`;
-          popupContent += `Forms: ${entry.AvailableForms}`;
-        } else {
-          popupContent += `No data available.`;
+        let emoji = '';
+        let forms = 'Unknown';
+        if (popupEntries.length > 0) {
+          emoji = popupEntries[0].EmojiActivity || '';
+          forms = popupEntries[0].AvailableForms || 'Unknown';
         }
+
+        const center = layer.getBounds().getCenter();
+        L.marker(center, {
+          icon: L.divIcon({
+            className: 'emoji-overlay',
+            html: emoji
+          })
+        }).addTo(emojiLayer);
+
+        const popupContent = `
+          <strong>${abbr} – ${selectedYear}</strong><br/>
+          ${emoji || 'No activity'}<br/>
+          Available Forms: ${forms}
+        `;
+
         layer.bindPopup(popupContent);
+      });
+    }
 
-        // Add emoji label
-        if (entry && entry.EmojiActivity) {
-          const center = layer.getBounds().getCenter();
-          const icon = L.divIcon({
-            className: 'emoji-label',
-            html: entry.EmojiActivity
-          });
-          const marker = L.marker(center, { icon }).addTo(map);
-          emojiMarkers.push(marker);
+    // Load both GeoJSON and popup data, then draw the map
+    Promise.all([
+      fetch('us-states.json').then(res => res.json()),
+      fetch('popup_summary_by_state_and_year.json').then(res => res.json())
+    ]).then(([geoData, popupJson]) => {
+      popupData = popupJson;
+      geojson = L.geoJson(geoData, {
+        style: {
+          color: '#666',
+          weight: 1,
+          fillColor: '#eee',
+          fillOpacity: 1
         }
-      });
-    }
-
-    function buildYearOptions() {
-      const yearSelect = document.getElementById("year");
-      availableYears.sort().forEach(year => {
-        const option = document.createElement("option");
-        option.value = year;
-        option.textContent = year;
-        yearSelect.appendChild(option);
-      });
-
-      yearSelect.addEventListener("change", (e) => {
-        updateMapForYear(e.target.value);
-      });
-    }
-
-    function loadMapData() {
-      Promise.all([
-        fetch("us-states.json").then(res => res.json()),
-        fetch("popup_summary_by_state_and_year.json").then(res => res.json())
-      ]).then(([geoData, popupData]) => {
-        window.usStatesData = geoData;
-        popupData.forEach(entry => {
-          const key = `${entry.State}-${entry.Year}`;
-          popupDataMap[key] = entry;
-          if (!availableYears.includes(entry.Year)) {
-            availableYears.push(entry.Year);
-          }
-        });
-
-        geojson = L.geoJson(window.usStatesData, {
-          style: style,
-          onEachFeature: function (feature, layer) {
-            layer.on({
-              click: function () {
-                const selectedYear = document.getElementById("year").value;
-                const abbr = feature.properties.STATE_ABBR || feature.properties.postal;
-                const key = `${abbr}-${selectedYear}`;
-                const entry = popupDataMap[key];
-
-                let popupContent = `<strong>${feature.properties.name} – ${selectedYear}</strong><br/>`;
-                if (entry) {
-                  popupContent += `Activity: ${entry.EmojiActivity}<br/>`;
-                  popupContent += `Forms: ${entry.AvailableForms}`;
-                } else {
-                  popupContent += `No data available.`;
-                }
-                layer.bindPopup(popupContent).openPopup();
-              }
-            });
-          }
-        }).addTo(map);
-
-        buildYearOptions();
-        document.getElementById("year").value = availableYears[0];
-        updateMapForYear(availableYears[0]);
-        console.log("✅ Map loaded with emoji overlays.");
-      });
-    }
-
-    document.addEventListener("DOMContentLoaded", () => {
-      loadMapData();
+      }).addTo(map);
+      updateMap(yearSelect.value);
+      console.log('✅ Map loaded with emoji overlays.');
+    }).catch(err => {
+      console.error('❌ Error loading data:', err);
     });
   </script>
 </body>
