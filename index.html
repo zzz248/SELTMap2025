@@ -1,118 +1,93 @@
+
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <title>🗺️ Legislative Activity Map</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="utf-8" />
+  <title>SELT Legislative Map</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
-    body {
-      margin: 0;
-      font-family: sans-serif;
+    #map { height: 100vh; }
+    .info {
+      background: white;
+      padding: 6px 8px;
+      font: 14px/16px Arial, Helvetica, sans-serif;
+      border-radius: 5px;
+      box-shadow: 0 0 15px rgba(0,0,0,0.2);
     }
-    #map {
-      height: 100vh;
-    }
-    .dropdown {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      z-index: 1000;
+    .legend {
       background: white;
       padding: 6px;
-      border-radius: 4px;
-    }
-    .emoji-overlay {
-      font-size: 18px;
-      pointer-events: none;
+      font-size: 12px;
+      line-height: 18px;
+      border-radius: 5px;
     }
   </style>
 </head>
 <body>
-  <div class="dropdown">
-    <label for="yearSelect">Select Year:</label>
-    <select id="yearSelect"></select>
-  </div>
   <div id="map"></div>
-
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     const map = L.map('map').setView([37.8, -96], 4);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap contributors'
+      maxZoom: 6,
+      minZoom: 4,
+      attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
-    let geojson;
-    let popupData = [];
-    let emojiLayer;
+    let stateLayer, popupData;
 
-    const yearSelect = document.getElementById('yearSelect');
-    for (let y = 2009; y <= 2024; y++) {
-      const option = document.createElement('option');
-      option.value = y;
-      option.textContent = y;
-      yearSelect.appendChild(option);
-    }
+    fetch('popup_summary_by_state_and_year.json')
+      .then(response => response.json())
+      .then(data => {
+        popupData = data;
+        console.log("✅ Popup data loaded");
 
-    yearSelect.addEventListener('change', () => {
-      updateMap(yearSelect.value);
-    });
+        return fetch('us-states.json');
+      })
+      .then(response => response.json())
+      .then(geojson => {
+        console.log("✅ GeoJSON loaded");
 
-    function updateMap(selectedYear) {
-      if (emojiLayer) {
-        emojiLayer.clearLayers();
-      }
-      emojiLayer = L.layerGroup().addTo(map);
-
-      geojson.eachLayer(layer => {
-        const abbr = layer.feature.properties.postal;
-        const popupEntries = popupData.filter(p => p.State === abbr && p.Year.toString() === selectedYear);
-
-        let emoji = '';
-        let forms = 'Unknown';
-        if (popupEntries.length > 0) {
-          emoji = popupEntries[0].EmojiActivity || '';
-          forms = popupEntries[0].AvailableForms || 'Unknown';
+        function getEmoji(stateAbbr, year) {
+          const match = popupData.find(entry => entry.State === stateAbbr && entry.Year === year);
+          return match ? match.EmojiActivity : '⚪';
         }
 
-        const center = layer.getBounds().getCenter();
-        L.marker(center, {
-          icon: L.divIcon({
-            className: 'emoji-overlay',
-            html: emoji
-          })
-        }).addTo(emojiLayer);
+        function getForms(stateAbbr, year) {
+          const match = popupData.find(entry => entry.State === stateAbbr && entry.Year === year);
+          return match ? match.AvailableForms : 'Unknown';
+        }
 
-        const popupContent = `
-          <strong>${abbr} – ${selectedYear}</strong><br/>
-          ${emoji || 'No activity'}<br/>
-          Available Forms: ${forms}
-        `;
+        const year = 2024;
 
-        layer.bindPopup(popupContent);
+        function styleFeature(feature) {
+          return {
+            weight: 1,
+            color: '#999',
+            fillColor: '#eeeeee',
+            fillOpacity: 1
+          };
+        }
+
+        function onEachFeature(feature, layer) {
+          const abbr = feature.properties.abbr;
+          const emoji = getEmoji(abbr, year);
+          const forms = getForms(abbr, year);
+          const popupContent = `<strong>${abbr} (${year})</strong><br/>${emoji}<br/>Available Forms: ${forms}`;
+          layer.bindPopup(popupContent);
+        }
+
+        stateLayer = L.geoJson(geojson, {
+          style: styleFeature,
+          onEachFeature: onEachFeature
+        }).addTo(map);
+
+      })
+      .catch(error => {
+        console.error("Error loading data:", error);
       });
-    }
-
-    // Load both GeoJSON and popup data, then draw the map
-    Promise.all([
-      fetch('us-states.json').then(res => res.json()),
-      fetch('popup_summary_by_state_and_year.json').then(res => res.json())
-    ]).then(([geoData, popupJson]) => {
-      popupData = popupJson;
-      geojson = L.geoJson(geoData, {
-        style: {
-          color: '#666',
-          weight: 1,
-          fillColor: '#eee',
-          fillOpacity: 1
-        }
-      }).addTo(map);
-      updateMap(yearSelect.value);
-      console.log('✅ Map loaded with emoji overlays.');
-    }).catch(err => {
-      console.error('❌ Error loading data:', err);
-    });
   </script>
 </body>
 </html>
