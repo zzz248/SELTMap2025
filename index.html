@@ -8,104 +8,122 @@
   <link
     rel="stylesheet"
     href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
-    integrity="sha512-xwE/XYg7Cijv3gFf8zGf4u5z7mYQ06ntoY8bKCOGzTsznRfjFYwAAc41Z1YFZqD4HukTPT/oGp1MGz1n9mtT+Q=="
+    integrity="sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A=="
     crossorigin=""
   />
   <style>
-    #map {
+    #map {{
       height: 90vh;
       width: 100%;
-    }
-    body {
-      font-family: sans-serif;
-      margin: 0;
-    }
-    .dropdown {
-      padding: 1em;
-    }
+    }}
+    #yearSelect {{
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 1000;
+      font-size: 16px;
+    }}
   </style>
 </head>
 <body>
-  <div class="dropdown">
-    <label for="yearSelect">Select Year:</label>
-    <select id="yearSelect"></select>
-  </div>
+  <select id="yearSelect"></select>
   <div id="map"></div>
 
   <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
   <script>
-    const map = L.map("map").setView([37.8, -96], 4);
+    const map = L.map('map').setView([37.8, -96], 4);
+    const yearSelect = document.getElementById('yearSelect');
+    const availableYears = [...Array(2025 - 2009).keys()].map(i => (i + 2009).toString());
 
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 6,
-      minZoom: 4,
-    }).addTo(map);
+    availableYears.forEach(year => {{
+      const option = document.createElement('option');
+      option.value = year;
+      option.text = year;
+      yearSelect.appendChild(option);
+    }});
 
-    let stateData = {};
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {{
+      attribution: '© OpenStreetMap contributors',
+    }}).addTo(map);
+
     let geojson;
+    let stateData = {{}};
+
+    function getColorFromActivity(activity) {{
+      if (!activity) return '#cccccc';
+      if (activity.includes("✅")) return '#e0f7ec';
+      if (activity.includes("❌")) return '#fdecea';
+      if (activity.includes("⛔")) return '#f8e8ff';
+      return '#eeeeee';
+    }}
+
+    function style(feature) {{
+      const abbr = feature.properties.STATE_ABBR || feature.properties.postal;
+      const year = yearSelect.value;
+      const activity = stateData[abbr]?.[year]?.activitySummary || '';
+      return {{
+        fillColor: getColorFromActivity(activity),
+        weight: 1,
+        opacity: 1,
+        color: 'white',
+        fillOpacity: 0.8,
+      }};
+    }}
+
+    function onEachFeature(feature, layer) {{
+      const abbr = feature.properties.STATE_ABBR || feature.properties.postal;
+      layer.on({{
+        click: function () {{
+          const year = yearSelect.value;
+          const info = stateData[abbr]?.[year];
+          const stateName = feature.properties.name;
+          const activity = info?.activitySummary || '⚪ No activity';
+          const forms = info?.existingForms?.join(', ') || 'None';
+          const link = info?.link || `${abbr.toLowerCase()}.html`;
+
+          const popupContent = `
+            <strong>${stateName} – ${year}</strong><br/>
+            <strong>Activity:</strong> ${activity}<br/>
+            <strong>Existing Forms:</strong> ${forms}<br/>
+            <a href="${link}" target="_blank">📜 Full Legislative History</a>
+          `;
+          layer.bindPopup(popupContent).openPopup();
+        }},
+      }});
+    }}
+
+    function resetMap() {{
+      if (geojson) geojson.remove();
+      geojson = L.geoJson(window.stateShapes, {{
+        style,
+        onEachFeature
+      }}).addTo(map);
+    }}
+
+    yearSelect.addEventListener('change', resetMap);
 
     fetch("popup_summary_by_state_and_year.json")
-      .then((res) => res.json())
-      .then((data) => {
-        stateData = {};
-        data.forEach((entry) => {
-          const key = entry.State + "-" + entry.Year;
-          stateData[key] = entry;
-        });
+      .then(res => res.json())
+      .then(data => {{
+        for (const entry of data) {{
+          const abbr = entry.abbreviation;
+          const year = entry.year.toString();
+          if (!stateData[abbr]) stateData[abbr] = {{}};
+          stateData[abbr][year] = {{
+            activitySummary: entry.activity_summary,
+            existingForms: entry.existing_forms,
+            link: entry.link
+          }};
+        }}
+        resetMap();
+      }});
 
-        loadMap();
-      });
-
-    function loadMap() {
-      fetch("https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json")
-        .then((res) => res.json())
-        .then((geoData) => {
-          geojson = L.geoJson(geoData, {
-            style: {
-              color: "#000",
-              weight: 1,
-              fillColor: "#e0e0e0",
-              fillOpacity: 0.7,
-            },
-            onEachFeature: (feature, layer) => {
-              layer.on({
-                click: () => {
-                  const state = feature.properties.name;
-                  const year = document.getElementById("yearSelect").value;
-                  const key = state + "-" + year;
-                  const entry = stateData[key];
-
-                  let content = "<strong>" + state + " – " + year + "</strong><br/>";
-
-                  if (entry) {
-                    content += "<br/><strong>Activity:</strong> " + (entry.EmojiActivity || "⚪ No activity");
-                    if (entry.AvailableForms) {
-                      content += "<br/><strong>Available Forms:</strong> " + entry.AvailableForms;
-                    }
-                    content += `<br/><br/><a href="${state.toLowerCase().replace(/ /g, "-")}.html" target="_blank">View Full Legislative History</a>`;
-                  } else {
-                    content += "<br/>No data available.";
-                  }
-
-                  layer.bindPopup(content).openPopup();
-                },
-              });
-            },
-          }).addTo(map);
-
-          populateYearDropdown();
-        });
-    }
-
-    function populateYearDropdown() {
-      const select = document.getElementById("yearSelect");
-      for (let y = 2009; y <= 2024; y++) {
-        const option = document.createElement("option");
-        option.value = y;
-        option.textContent = y;
-        select.appendChild(option);
-      }
-    }
+    fetch("us-states.json")
+      .then(res => res.json())
+      .then(data => {{
+        window.stateShapes = data;
+        resetMap();
+      }});
   </script>
 </body>
 </html>
