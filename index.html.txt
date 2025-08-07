@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>🗺️ Legislative Activity Map</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    body {
+      margin: 0;
+      font-family: sans-serif;
+    }
+    #map {
+      height: 100vh;
+    }
+    .dropdown {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 1000;
+      background: white;
+      padding: 6px;
+      border-radius: 4px;
+    }
+    .emoji-overlay {
+      font-size: 18px;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="dropdown">
+    <label for="yearSelect">Select Year:</label>
+    <select id="yearSelect"></select>
+  </div>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const map = L.map('map').setView([37.8, -96], 4);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    let geojson;
+    let popupData = [];
+    let emojiLayer;
+
+    const yearSelect = document.getElementById('yearSelect');
+    for (let y = 2009; y <= 2024; y++) {
+      const option = document.createElement('option');
+      option.value = y;
+      option.textContent = y;
+      yearSelect.appendChild(option);
+    }
+
+    yearSelect.addEventListener('change', () => {
+      updateMap(yearSelect.value);
+    });
+
+    function updateMap(selectedYear) {
+      if (emojiLayer) {
+        emojiLayer.clearLayers();
+      }
+      emojiLayer = L.layerGroup().addTo(map);
+
+      geojson.eachLayer(layer => {
+        const abbr = layer.feature.properties.postal;
+        const popupEntries = popupData.filter(p => p.State === abbr && p.Year.toString() === selectedYear);
+
+        let emoji = '';
+        let forms = 'Unknown';
+        if (popupEntries.length > 0) {
+          emoji = popupEntries[0].EmojiActivity || '';
+          forms = popupEntries[0].AvailableForms || 'Unknown';
+        }
+
+        const center = layer.getBounds().getCenter();
+        L.marker(center, {
+          icon: L.divIcon({
+            className: 'emoji-overlay',
+            html: emoji
+          })
+        }).addTo(emojiLayer);
+
+        const popupContent = `
+          <strong>${abbr} – ${selectedYear}</strong><br/>
+          ${emoji || 'No activity'}<br/>
+          Available Forms: ${forms}
+        `;
+
+        layer.bindPopup(popupContent);
+      });
+    }
+
+    // Load both GeoJSON and popup data, then draw the map
+    Promise.all([
+      fetch('us-states.json').then(res => res.json()),
+      fetch('popup_summary_by_state_and_year.json').then(res => res.json())
+    ]).then(([geoData, popupJson]) => {
+      popupData = popupJson;
+      geojson = L.geoJson(geoData, {
+        style: {
+          color: '#666',
+          weight: 1,
+          fillColor: '#eee',
+          fillOpacity: 1
+        }
+      }).addTo(map);
+      updateMap(yearSelect.value);
+      console.log('✅ Map loaded with emoji overlays.');
+    }).catch(err => {
+      console.error('❌ Error loading data:', err);
+    });
+  </script>
+</body>
+</html>
