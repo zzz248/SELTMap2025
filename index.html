@@ -107,8 +107,9 @@
       .then(function(data) {
         for (var i = 0; i < data.length; i++) {
           var entry = data[i];
+          if (!entry || !entry.year || !entry.abbreviation) continue;
+          var entry = data[i];
           var abbr = entry.abbreviation;
-          if (!entry.year || !entry.abbreviation) continue;
           var year = entry.year.toString();
           if (!stateData[abbr]) stateData[abbr] = {};
           stateData[abbr][year] = {
