@@ -2,134 +2,131 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>🗺️ Legislative Activity Map</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" href="favicon.ico" type="image/x-icon">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <style>
-        html, body, #map {
-            height: 100%;
-            margin: 0;
-        }
-        #year-select {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            z-index: 1000;
-            background: white;
-            padding: 5px;
-            border-radius: 4px;
-            font-size: 14px;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <title>🗺️ Legislative Activity Map</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="favicon.ico" type="image/x-icon" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    html, body, #map {
+      height: 100%;
+      margin: 0;
+    }
+    #year-select {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 1000;
+      background: white;
+      padding: 5px;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+  </style>
 </head>
 <body>
-    <select id="year-select"></select>
-    <div id="map"></div>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script>
-        const map = L.map('map').setView([37.8, -96], 4);
-        let geojsonLayer;
-        const stateDataByYear = {};
-        const popupData = {};
+  <select id="year-select"></select>
+  <div id="map"></div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const map = L.map('map').setView([37.8, -96], 4);
+    let geojsonLayer;
+    let statesData = null;
+    let popupData = {};
 
-        const colors = {
-            default: "#d3d3d3"
-        };
+    const colors = {
+      default: "#d3d3d3"
+    };
 
-        const activityIcons = {
-            "Enacted One": "✅",
-            "Enacted Two": "✅✅",
-            "Enacted Three": "✅✅✅",
-            "Failed": "❌",
-            "Repealed": "⛔",
-            "No Activity": "⚪"
-        };
+    const activityIcons = {
+      "Enacted One": "✅",
+      "Enacted Two": "✅✅",
+      "Enacted Three": "✅✅✅",
+      "Failed": "❌",
+      "Repealed": "⛔",
+      "No Activity": "⚪"
+    };
 
-        function getColor() {
-            return colors.default;
+    function getColor() {
+      return colors.default;
+    }
+
+    function buildPopupContent(state, year) {
+      const key = `${state}-${year}`;
+      const entry = popupData[key];
+      if (!entry) return `<strong>${state}</strong><br>⚠️ No data for ${year}`;
+
+      const emojiLine = entry.EmojiActivity || "⚪";
+      const formsLine = entry.AvailableForms && entry.AvailableForms !== "None"
+        ? `Available Corporate Forms in ${year}: ${entry.AvailableForms}`
+        : `No corporate forms available in ${year}`;
+
+      return `<strong>${state} – ${year}</strong><br>${emojiLine}<br>${formsLine}`;
+    }
+
+    function styleFeature(feature) {
+      return {
+        fillColor: getColor(),
+        weight: 1,
+        opacity: 1,
+        color: '#aaa',
+        dashArray: '3',
+        fillOpacity: 0.7
+      };
+    }
+
+    function onEachFeature(feature, layer) {
+      const abbr = feature.properties.postal || feature.properties.STATE_ABBR;
+      layer.on({
+        click: () => {
+          const year = document.getElementById("year-select").value;
+          const popup = buildPopupContent(abbr, year);
+          layer.bindPopup(popup).openPopup();
         }
+      });
+    }
 
-        function buildPopupContent(state, year) {
-            const key = `${state}-${year}`;
-            const entry = popupData[key];
+    function drawMap() {
+      if (geojsonLayer) geojsonLayer.remove();
+      geojsonLayer = L.geoJson(statesData, {
+        style: styleFeature,
+        onEachFeature: onEachFeature
+      }).addTo(map);
+    }
 
-            if (!entry) return `<strong>${state}</strong><br>⚠️ No data for ${year}`;
+    function updateMap() {
+      drawMap(); // Redraw to refresh popup bindings
+    }
 
-            const emojiLine = entry.EmojiActivity || "⚪";
-            const formsLine = entry.AvailableForms && entry.AvailableForms !== "None"
-                ? `Available Corporate Forms in ${year}: ${entry.AvailableForms}`
-                : `No corporate forms available in ${year}`;
+    const yearSelect = document.getElementById("year-select");
+    for (let y = 2009; y <= 2024; y++) {
+      const opt = document.createElement("option");
+      opt.value = y;
+      opt.text = y;
+      yearSelect.appendChild(opt);
+    }
+    yearSelect.value = "2024";
+    yearSelect.addEventListener("change", updateMap);
 
-            return `<strong>${state} – ${year}</strong><br>${emojiLine}<br>${formsLine}`;
+    // First load both datasets before drawing anything
+    Promise.all([
+      fetch("https://zzz248.github.io/SELTMap2025/us-states.json").then(res => res.json()),
+      fetch("https://zzz248.github.io/SELTMap2025/popup_summary_by_state_and_year.json").then(res => res.json())
+    ])
+    .then(([geoData, popupJson]) => {
+      statesData = geoData;
+      popupJson.forEach(entry => {
+        if (entry.State && entry.Year) {
+          const key = `${entry.State}-${entry.Year}`;
+          popupData[key] = entry;
         }
-
-        function styleFeature(feature) {
-            return {
-                fillColor: getColor(),
-                weight: 1,
-                opacity: 1,
-                color: 'white',
-                dashArray: '3',
-                fillOpacity: 0.7
-            };
-        }
-
-        function onEachFeature(feature, layer) {
-            const abbr = feature.properties.postal || feature.properties.STATE_ABBR;
-            layer.on({
-                click: () => {
-                    const year = document.getElementById("year-select").value;
-                    const popup = buildPopupContent(abbr, year);
-                    layer.bindPopup(popup).openPopup();
-                }
-            });
-        }
-
-        function updateMap() {
-            const selectedYear = document.getElementById("year-select").value;
-            if (geojsonLayer) geojsonLayer.remove();
-
-            geojsonLayer = L.geoJson(statesData, {
-                style: styleFeature,
-                onEachFeature: onEachFeature
-            }).addTo(map);
-        }
-
-        let statesData;
-
-        fetch("https://zzz248.github.io/SELTMap2025/popup_summary_by_state_and_year.json")
-            .then(res => res.json())
-            .then(data => {
-                data.forEach(entry => {
-                    if (!entry || !entry.State || !entry.Year) return;
-                    const key = `${entry.State}-${entry.Year}`;
-                    popupData[key] = entry;
-                });
-                console.log("✅ Popup data loaded");
-            });
-
-        fetch("https://zzz248.github.io/SELTMap2025/us-states.json")
-            .then(res => res.json())
-            .then(data => {
-                statesData = data;
-                geojsonLayer = L.geoJson(statesData, {
-                    style: styleFeature,
-                    onEachFeature: onEachFeature
-                }).addTo(map);
-                console.log("✅ GeoJSON loaded");
-            });
-
-        const yearSelect = document.getElementById("year-select");
-        for (let y = 2009; y <= 2024; y++) {
-            const opt = document.createElement("option");
-            opt.value = y;
-            opt.text = y;
-            yearSelect.appendChild(opt);
-        }
-        yearSelect.value = "2024";
-        yearSelect.addEventListener("change", updateMap);
-    </script>
+      });
+      drawMap();
+      console.log("✅ Both data sources loaded and map rendered");
+    })
+    .catch(err => {
+      console.error("❌ Error loading data:", err);
+    });
+  </script>
 </body>
 </html>
