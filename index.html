@@ -1,37 +1,96 @@
 
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Legislative Activity Map</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-  <style>
-    #map { height: 90vh; width: 100%; }
-    body { font-family: Arial, sans-serif; margin: 0; }
-    #year-select {
-      position: absolute; top: 10px; left: 10px; z-index: 1000;
-      background: white; padding: 6px; border-radius: 4px; box-shadow: 0 0 5px rgba(0,0,0,0.3);
-    }
-  </style>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Legislative Activity Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <style>
+        #map { height: 100vh; width: 100vw; }
+        .dropdown { position: absolute; top: 10px; left: 50px; z-index: 1000; background: white; padding: 5px; }
+    </style>
 </head>
 <body>
-  <div id="year-select">
-    <label for="year">Select Year:</label>
-    <select id="year">
-      ${[...Array(2024 - 2009 + 1).keys()].map(i => `<option value="${i + 2009}">${i + 2009}</option>`).join('')}
-    </select>
-  </div>
-  <div id="map"></div>
+    <div class="dropdown">
+        <label for="yearSelect">Select Year:</label>
+        <select id="yearSelect"></select>
+    </div>
+    <div id="map"></div>
 
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script>
-    let map = L.map("map").setView([37.8, -96], 4);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
-  </script>
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script>
+        const map = L.map('map').setView([37.8, -96], 4);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 18,
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        const yearSelect = document.getElementById('yearSelect');
+        const years = Array.from({ length: 2024 - 2009 + 1 }, (_, i) => 2009 + i);
+        years.forEach(year => {
+            const option = document.createElement('option');
+            option.value = year;
+            option.textContent = year;
+            yearSelect.appendChild(option);
+        });
+
+        let geojsonLayer;
+        let popupData;
+
+        function getPopupContent(stateAbbr, year) {
+            const entry = popupData.find(e => e.State === stateAbbr && e.Year === year);
+            if (!entry) return `${stateAbbr} (${year})<br>No activity<br>Available Forms: Unknown`;
+            return `${stateAbbr} (${year})<br>${entry.EmojiActivity}<br>Available Forms: ${entry.AvailableForms}`;
+        }
+
+        function styleFeature(feature) {
+            return {
+                weight: 1,
+                color: "#999",
+                fillOpacity: 0.3,
+                fillColor: "#dcdcdc"
+            };
+        }
+
+        function onEachFeature(feature, layer) {
+            layer.on({
+                click: () => {
+                    const stateAbbr = feature.properties.STATE_ABBR || feature.properties.postal || feature.properties.abbr || feature.properties.name;
+                    const selectedYear = parseInt(yearSelect.value);
+                    const content = getPopupContent(stateAbbr, selectedYear);
+                    layer.bindPopup(content).openPopup();
+                }
+            });
+        }
+
+        function renderMap(geojson, popupEntries) {
+            popupData = popupEntries;
+            if (geojsonLayer) geojsonLayer.remove();
+            geojsonLayer = L.geoJSON(geojson, {
+                style: styleFeature,
+                onEachFeature: onEachFeature
+            }).addTo(map);
+        }
+
+        function loadData() {
+            Promise.all([
+                fetch("us-states.json").then(res => res.json()),
+                fetch("popup_summary_by_state_and_year.json").then(res => res.json())
+            ]).then(([geojson, popupEntries]) => {
+                console.log("✅ Both data sources loaded and map rendered");
+                renderMap(geojson, popupEntries);
+            }).catch(err => {
+                console.error("Error loading data:", err);
+            });
+        }
+
+        yearSelect.addEventListener("change", () => {
+            loadData();
+        });
+
+        loadData();
+    </script>
 </body>
 </html>
-
