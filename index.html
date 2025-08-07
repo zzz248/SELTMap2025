@@ -1,116 +1,98 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>Legislative Activity Map</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
-    <style>
-        #map { height: 100vh; width: 100vw; }
-        .dropdown { position: absolute; top: 10px; left: 50px; z-index: 1000; background: white; padding: 5px; }
-    </style>
+  <meta charset="UTF-8" />
+  <title>SELT Legislative Map</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    #map { height: 90vh; width: 100%; }
+    body { font-family: Arial, sans-serif; }
+    #yearDropdown { margin: 10px; padding: 5px; font-size: 16px; }
+  </style>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
 </head>
 <body>
-    <div class="dropdown">
-        <label for="yearSelect">Select Year:</label>
-        <select id="yearSelect"></select>
-    </div>
-    <div id="map"></div>
+  <h2>📅 Legislative Activity Map</h2>
+  <label for="yearDropdown">Select Year:</label>
+  <select id="yearDropdown"></select>
+  <div id="map"></div>
 
-    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
-    <script>
-        const map = L.map('map').setView([37.8, -96], 4);
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    let selectedYear = 2024;
+    let popupData = [];
 
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 18,
-            attribution: '© OpenStreetMap contributors'
-        }).addTo(map);
+    // Load both datasets, then render
+    async function loadData() {
+      const geoRes = await fetch("us-states.json");
+      const popupRes = await fetch("popup_summary_by_state_and_year.json");
+      const geojson = await geoRes.json();
+      popupData = await popupRes.json();
 
-        const yearSelect = document.getElementById('yearSelect');
-        const years = Array.from({ length: 2024 - 2009 + 1 }, (_, i) => 2009 + i);
-        years.forEach(year => {
-            const option = document.createElement('option');
-            option.value = year;
-            option.textContent = year;
-            yearSelect.appendChild(option);
-        });
-
-        let geojsonLayer;
-        let popupData;
-
-        function getPopupContent(stateAbbr, year) {
-const match = popupData.find(item => item.State === stateAbbr && item.Year === year);
-            if (!entry) return `${stateAbbr} (${year})<br>No activity<br>Available Forms: Unknown`;
-            return `${stateAbbr} (${year})<br>${entry.EmojiActivity}<br>Available Forms: ${entry.AvailableForms}`;
-        }
-
-        function styleFeature(feature) {
-            return {
-                weight: 1,
-                color: "#999",
-                fillOpacity: 0.3,
-                fillColor: "#dcdcdc"
-            };
-        }
-
-        function onEachFeature(feature, layer) {
-            layer.on({
-                click: () => {
-                    const stateAbbr = feature.properties.abbr || feature.properties.STATE_ABBR || feature.properties.postal || feature.properties.name;
-                    const selectedYear = parseInt(yearSelect.value);
-                    const content = getPopupContent(stateAbbr, selectedYear);
-                    layer.bindPopup(content).openPopup();
-                }
-            });
-        }
-
-        function renderMap(geojson, popupEntries) {
-            popupData = popupEntries;
-            if (geojsonLayer) geojsonLayer.remove();
-            geojsonLayer = L.geoJSON(geojson, {
-                style: styleFeature,
-                onEachFeature: onEachFeature
-            }).addTo(map);
-        }
-
-        function onEachFeature(feature, layer) {
-  layer.on({
-    click: function (e) {
-      console.log("You clicked a state");
-      const stateAbbr = feature.properties.abbr || feature.properties.STATE_ABBR || feature.properties.postal || feature.properties.name;
-      const popupContent = getPopupContent(stateAbbr, selectedYear);
-      layer.bindPopup(popupContent).openPopup();
+      console.log("✅ Both data sources loaded");
+      renderYearDropdown();
+      renderMap(geojson);
     }
-  });
-}
-        function renderMap(geojson, popupEntries) {
-  L.geoJson(geojson, {
-    style: styleFeature,
-    onEachFeature: onEachFeature
-  }).addTo(map);
 
-  console.log("✅ Map rendered");
-}
-        function loadData() {
-            Promise.all([
-                fetch("us-states.json").then(res => res.json()),
-                fetch("popup_summary_by_state_and_year.json").then(res => res.json())
-            ]).then(([geojson, popupEntries]) => {
-                console.log("✅ Both data sources loaded and map rendered");
-                renderMap(geojson, popupEntries);
-            }).catch(err => {
-                console.error("Error loading data:", err);
-            });
+    function renderYearDropdown() {
+      const dropdown = document.getElementById("yearDropdown");
+      const years = [...new Set(popupData.map(entry => entry.Year))].sort();
+      years.forEach(year => {
+        const option = document.createElement("option");
+        option.value = year;
+        option.textContent = year;
+        if (year === selectedYear) option.selected = true;
+        dropdown.appendChild(option);
+      });
+
+      dropdown.addEventListener("change", (e) => {
+        selectedYear = parseInt(e.target.value);
+        loadData(); // Reload and redraw
+      });
+    }
+
+    function getPopupContent(stateAbbr, year) {
+      const entry = popupData.find(item => item.State === stateAbbr && item.Year === year);
+      if (!entry) {
+        return `${stateAbbr} (${year})<br>⚪<br>Available Forms: Unknown`;
+      }
+      return `${stateAbbr} (${year})<br>${entry.EmojiActivity}<br>Available Forms: ${entry.AvailableForms}`;
+    }
+
+    function styleFeature(feature) {
+      return {
+        weight: 1,
+        color: "#999",
+        fillOpacity: 0.4,
+        fillColor: "#dcdcdc"
+      };
+    }
+
+    function onEachFeature(feature, layer) {
+      layer.on({
+        click: function () {
+          const stateAbbr = feature.properties.abbr || feature.properties.STATE_ABBR || feature.properties.postal || feature.properties.name;
+          const popupContent = getPopupContent(stateAbbr, selectedYear);
+          layer.bindPopup(popupContent).openPopup();
         }
+      });
+    }
 
-        yearSelect.addEventListener("change", () => {
-    // Year changed – popup content will adjust on state click
-});
+    function renderMap(geojson) {
+      document.getElementById("map").innerHTML = "";
+      const map = L.map("map").setView([37.8, -96], 4);
 
-        // loadData();
-    </script>
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "&copy; OpenStreetMap contributors"
+      }).addTo(map);
+
+      L.geoJSON(geojson, {
+        style: styleFeature,
+        onEachFeature: onEachFeature
+      }).addTo(map);
+    }
+
+    loadData();
+  </script>
 </body>
 </html>
-Fix popup data matching logic
-restore onEachFeature + renderMap
