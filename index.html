@@ -12,17 +12,17 @@
     crossorigin=""
   />
   <style>
-    #map {{
+    #map {
       height: 90vh;
       width: 100%;
-    }}
-    #yearSelect {{
+    }
+    #yearSelect {
       position: absolute;
       top: 10px;
       left: 10px;
       z-index: 1000;
       font-size: 16px;
-    }}
+    }
   </style>
 </head>
 <body>
@@ -33,97 +33,95 @@
   <script>
     const map = L.map('map').setView([37.8, -96], 4);
     const yearSelect = document.getElementById('yearSelect');
-    const availableYears = [...Array(2025 - 2009).keys()].map(i => (i + 2009).toString());
+    const availableYears = Array.from({ length: 2025 - 2009 }, (_, i) => (i + 2009).toString());
 
-    availableYears.forEach(year => {{
+    availableYears.forEach(year => {
       const option = document.createElement('option');
       option.value = year;
       option.text = year;
       yearSelect.appendChild(option);
-    }});
+    });
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {{
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors',
-    }}).addTo(map);
+    }).addTo(map);
 
     let geojson;
-    let stateData = {{}};
+    let stateData = {};
 
-    function getColorFromActivity(activity) {{
+    function getColorFromActivity(activity) {
       if (!activity) return '#cccccc';
       if (activity.includes("✅")) return '#e0f7ec';
       if (activity.includes("❌")) return '#fdecea';
       if (activity.includes("⛔")) return '#f8e8ff';
       return '#eeeeee';
-    }}
+    }
 
-    function style(feature) {{
+    function style(feature) {
       const abbr = feature.properties.STATE_ABBR || feature.properties.postal;
       const year = yearSelect.value;
       const activity = stateData[abbr]?.[year]?.activitySummary || '';
-      return {{
+      return {
         fillColor: getColorFromActivity(activity),
         weight: 1,
         opacity: 1,
         color: 'white',
         fillOpacity: 0.8,
-      }};
-    }}
+      };
+    }
 
-    function onEachFeature(feature, layer) {{
+    function onEachFeature(feature, layer) {
       const abbr = feature.properties.STATE_ABBR || feature.properties.postal;
-      layer.on({{
-        click: function () {{
-          const year = yearSelect.value;
-          const info = stateData[abbr]?.[year];
-          const stateName = feature.properties.name;
-          const activity = info?.activitySummary || '⚪ No activity';
-          const forms = info?.existingForms?.join(', ') || 'None';
-          const link = info?.link || `${abbr.toLowerCase()}.html`;
+      layer.on('click', function () {
+        const year = yearSelect.value;
+        const info = stateData[abbr]?.[year];
+        const stateName = feature.properties.name;
+        const activity = info?.activitySummary || '⚪ No activity';
+        const forms = info?.existingForms?.join(', ') || 'None';
+        const link = info?.link || `${abbr.toLowerCase()}.html`;
 
-          const popupContent = `
-            <strong>${stateName} – ${year}</strong><br/>
-            <strong>Activity:</strong> ${activity}<br/>
-            <strong>Existing Forms:</strong> ${forms}<br/>
-            <a href="${link}" target="_blank">📜 Full Legislative History</a>
-          `;
-          layer.bindPopup(popupContent).openPopup();
-        }},
-      }});
-    }}
+        const popupContent = `
+          <strong>${stateName} – ${year}</strong><br/>
+          <strong>Activity:</strong> ${activity}<br/>
+          <strong>Existing Forms:</strong> ${forms}<br/>
+          <a href="${link}" target="_blank">📜 Full Legislative History</a>
+        `;
+        layer.bindPopup(popupContent).openPopup();
+      });
+    }
 
-    function resetMap() {{
+    function resetMap() {
       if (geojson) geojson.remove();
-      geojson = L.geoJson(window.stateShapes, {{
+      geojson = L.geoJson(window.stateShapes, {
         style,
         onEachFeature
-      }}).addTo(map);
-    }}
+      }).addTo(map);
+    }
 
     yearSelect.addEventListener('change', resetMap);
 
     fetch("popup_summary_by_state_and_year.json")
       .then(res => res.json())
-      .then(data => {{
-        for (const entry of data) {{
+      .then(data => {
+        for (const entry of data) {
           const abbr = entry.abbreviation;
           const year = entry.year.toString();
-          if (!stateData[abbr]) stateData[abbr] = {{}};
-          stateData[abbr][year] = {{
+          if (!stateData[abbr]) stateData[abbr] = {};
+          stateData[abbr][year] = {
             activitySummary: entry.activity_summary,
             existingForms: entry.existing_forms,
             link: entry.link
-          }};
-        }}
+          };
+        }
         resetMap();
-      }});
+      });
 
     fetch("us-states.json")
       .then(res => res.json())
-      .then(data => {{
+      .then(data => {
         window.stateShapes = data;
         resetMap();
-      }});
+      });
   </script>
 </body>
 </html>
