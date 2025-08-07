@@ -103,6 +103,7 @@
             .then(res => res.json())
             .then(data => {
                 data.forEach(entry => {
+                    if (!entry || !entry.State || !entry.Year) return;
                     const key = `${entry.State}-${entry.Year}`;
                     popupData[key] = entry;
                 });
