@@ -11,16 +11,6 @@
       margin: 0;
       font-family: Arial, sans-serif;
     }
-    .info {
-      background: white;
-      padding: 6px 8px;
-      font-size: 14px;
-      box-shadow: 0 0 15px rgba(0,0,0,0.2);
-    }
-    .legend {
-      line-height: 18px;
-      color: #555;
-    }
     .year-select {
       position: absolute;
       top: 10px;
@@ -29,6 +19,10 @@
       background: white;
       padding: 5px;
       border-radius: 4px;
+    }
+    .emoji-label {
+      font-size: 20px;
+      text-align: center;
     }
   </style>
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
@@ -48,12 +42,12 @@
     }).addTo(map);
 
     let geojson;
-    let stateData = {};
     let popupDataMap = {};
-    const availableYears = [];
+    let emojiMarkers = [];
+    let availableYears = [];
 
     function getColor() {
-      return '#e0e0e0'; // light gray for neutral fill
+      return '#e0e0e0'; // neutral gray
     }
 
     function style(feature) {
@@ -67,36 +61,39 @@
       };
     }
 
-    function onEachFeature(feature, layer) {
-      layer.on({
-        click: function (e) {
-          const abbr = feature.properties.STATE_ABBR || feature.properties.postal;
-          const selectedYear = document.getElementById('year').value;
-          const key = `${abbr}-${selectedYear}`;
-          const entry = popupDataMap[key];
-          let popupContent = `<strong>${feature.properties.name} – ${selectedYear}</strong><br/>`;
-
-          if (entry) {
-            popupContent += `Activity: ${entry.EmojiActivity}<br/>`;
-            popupContent += `Forms: ${entry.AvailableForms}`;
-          } else {
-            popupContent += `No data available.`;
-          }
-
-          layer.bindPopup(popupContent).openPopup();
-        }
-      });
+    function clearEmojiMarkers() {
+      emojiMarkers.forEach(marker => map.removeLayer(marker));
+      emojiMarkers = [];
     }
 
-    function drawMap() {
-      if (geojson) {
-        geojson.clearLayers();
-      }
+    function updateMapForYear(year) {
+      clearEmojiMarkers();
+      geojson.eachLayer(layer => {
+        const abbr = layer.feature.properties.STATE_ABBR || layer.feature.properties.postal;
+        const key = `${abbr}-${year}`;
+        const entry = popupDataMap[key];
 
-      geojson = L.geoJson(window.usStatesData, {
-        style: style,
-        onEachFeature: onEachFeature
-      }).addTo(map);
+        // Set popup
+        let popupContent = `<strong>${layer.feature.properties.name} – ${year}</strong><br/>`;
+        if (entry) {
+          popupContent += `Activity: ${entry.EmojiActivity}<br/>`;
+          popupContent += `Forms: ${entry.AvailableForms}`;
+        } else {
+          popupContent += `No data available.`;
+        }
+        layer.bindPopup(popupContent);
+
+        // Add emoji label
+        if (entry && entry.EmojiActivity) {
+          const center = layer.getBounds().getCenter();
+          const icon = L.divIcon({
+            className: 'emoji-label',
+            html: entry.EmojiActivity
+          });
+          const marker = L.marker(center, { icon }).addTo(map);
+          emojiMarkers.push(marker);
+        }
+      });
     }
 
     function buildYearOptions() {
@@ -106,6 +103,10 @@
         option.value = year;
         option.textContent = year;
         yearSelect.appendChild(option);
+      });
+
+      yearSelect.addEventListener("change", (e) => {
+        updateMapForYear(e.target.value);
       });
     }
 
@@ -123,8 +124,33 @@
           }
         });
 
+        geojson = L.geoJson(window.usStatesData, {
+          style: style,
+          onEachFeature: function (feature, layer) {
+            layer.on({
+              click: function () {
+                const selectedYear = document.getElementById("year").value;
+                const abbr = feature.properties.STATE_ABBR || feature.properties.postal;
+                const key = `${abbr}-${selectedYear}`;
+                const entry = popupDataMap[key];
+
+                let popupContent = `<strong>${feature.properties.name} – ${selectedYear}</strong><br/>`;
+                if (entry) {
+                  popupContent += `Activity: ${entry.EmojiActivity}<br/>`;
+                  popupContent += `Forms: ${entry.AvailableForms}`;
+                } else {
+                  popupContent += `No data available.`;
+                }
+                layer.bindPopup(popupContent).openPopup();
+              }
+            });
+          }
+        }).addTo(map);
+
         buildYearOptions();
-        drawMap();
+        document.getElementById("year").value = availableYears[0];
+        updateMapForYear(availableYears[0]);
+        console.log("✅ Map loaded with emoji overlays.");
       });
     }
 
