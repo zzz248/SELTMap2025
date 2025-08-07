@@ -5,127 +5,131 @@
   <meta charset="UTF-8" />
   <title>🗺️ Legislative Activity Map</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="icon" href="favicon.ico" type="image/x-icon" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     html, body, #map {
       height: 100%;
       margin: 0;
+      font-family: Arial, sans-serif;
     }
-    #year-select {
+    .info {
+      background: white;
+      padding: 6px 8px;
+      font-size: 14px;
+      box-shadow: 0 0 15px rgba(0,0,0,0.2);
+    }
+    .legend {
+      line-height: 18px;
+      color: #555;
+    }
+    .year-select {
       position: absolute;
       top: 10px;
-      left: 10px;
+      left: 50px;
       z-index: 1000;
       background: white;
       padding: 5px;
       border-radius: 4px;
-      font-size: 14px;
     }
   </style>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
 </head>
 <body>
-  <select id="year-select"></select>
+  <div class="year-select">
+    <label for="year">Year:</label>
+    <select id="year"></select>
+  </div>
   <div id="map"></div>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script>
     const map = L.map('map').setView([37.8, -96], 4);
-    let geojsonLayer;
-    let statesData = null;
-    let popupData = {};
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 6,
+      minZoom: 3
+    }).addTo(map);
 
-    const colors = {
-      default: "#d3d3d3"
-    };
-
-    const activityIcons = {
-      "Enacted One": "✅",
-      "Enacted Two": "✅✅",
-      "Enacted Three": "✅✅✅",
-      "Failed": "❌",
-      "Repealed": "⛔",
-      "No Activity": "⚪"
-    };
+    let geojson;
+    let stateData = {};
+    let popupDataMap = {};
+    const availableYears = [];
 
     function getColor() {
-      return colors.default;
+      return '#e0e0e0'; // light gray for neutral fill
     }
 
-    function buildPopupContent(state, year) {
-      const key = `${state}-${year}`;
-      const entry = popupData[key];
-      if (!entry) return `<strong>${state}</strong><br>⚠️ No data for ${year}`;
-
-      const emojiLine = entry.EmojiActivity || "⚪";
-      const formsLine = entry.AvailableForms && entry.AvailableForms !== "None"
-        ? `Available Corporate Forms in ${year}: ${entry.AvailableForms}`
-        : `No corporate forms available in ${year}`;
-
-      return `<strong>${state} – ${year}</strong><br>${emojiLine}<br>${formsLine}`;
-    }
-
-    function styleFeature(feature) {
+    function style(feature) {
       return {
         fillColor: getColor(),
         weight: 1,
         opacity: 1,
-        color: '#aaa',
+        color: 'white',
         dashArray: '3',
         fillOpacity: 0.7
       };
     }
 
     function onEachFeature(feature, layer) {
-      const abbr = feature.properties.postal || feature.properties.STATE_ABBR;
       layer.on({
-        click: () => {
-          const year = document.getElementById("year-select").value;
-          const popup = buildPopupContent(abbr, year);
-          layer.bindPopup(popup).openPopup();
+        click: function (e) {
+          const abbr = feature.properties.STATE_ABBR || feature.properties.postal;
+          const selectedYear = document.getElementById('year').value;
+          const key = `${abbr}-${selectedYear}`;
+          const entry = popupDataMap[key];
+          let popupContent = `<strong>${feature.properties.name} – ${selectedYear}</strong><br/>`;
+
+          if (entry) {
+            popupContent += `Activity: ${entry.EmojiActivity}<br/>`;
+            popupContent += `Forms: ${entry.AvailableForms}`;
+          } else {
+            popupContent += `No data available.`;
+          }
+
+          layer.bindPopup(popupContent).openPopup();
         }
       });
     }
 
     function drawMap() {
-      if (geojsonLayer) geojsonLayer.remove();
-      geojsonLayer = L.geoJson(statesData, {
-        style: styleFeature,
+      if (geojson) {
+        geojson.clearLayers();
+      }
+
+      geojson = L.geoJson(window.usStatesData, {
+        style: style,
         onEachFeature: onEachFeature
       }).addTo(map);
     }
 
-    function updateMap() {
-      drawMap(); // Redraw to refresh popup bindings
-    }
-
-    const yearSelect = document.getElementById("year-select");
-    for (let y = 2009; y <= 2024; y++) {
-      const opt = document.createElement("option");
-      opt.value = y;
-      opt.text = y;
-      yearSelect.appendChild(opt);
-    }
-    yearSelect.value = "2024";
-    yearSelect.addEventListener("change", updateMap);
-
-    // First load both datasets before drawing anything
-    Promise.all([
-      fetch("https://zzz248.github.io/SELTMap2025/us-states.json").then(res => res.json()),
-      fetch("https://zzz248.github.io/SELTMap2025/popup_summary_by_state_and_year.json").then(res => res.json())
-    ])
-    .then(([geoData, popupJson]) => {
-      statesData = geoData;
-      popupJson.forEach(entry => {
-        if (entry.State && entry.Year) {
-          const key = `${entry.State}-${entry.Year}`;
-          popupData[key] = entry;
-        }
+    function buildYearOptions() {
+      const yearSelect = document.getElementById("year");
+      availableYears.sort().forEach(year => {
+        const option = document.createElement("option");
+        option.value = year;
+        option.textContent = year;
+        yearSelect.appendChild(option);
       });
-      drawMap();
-      console.log("✅ Both data sources loaded and map rendered");
-    })
-    .catch(err => {
-      console.error("❌ Error loading data:", err);
+    }
+
+    function loadMapData() {
+      Promise.all([
+        fetch("us-states.json").then(res => res.json()),
+        fetch("popup_summary_by_state_and_year.json").then(res => res.json())
+      ]).then(([geoData, popupData]) => {
+        window.usStatesData = geoData;
+        popupData.forEach(entry => {
+          const key = `${entry.State}-${entry.Year}`;
+          popupDataMap[key] = entry;
+          if (!availableYears.includes(entry.Year)) {
+            availableYears.push(entry.Year);
+          }
+        });
+
+        buildYearOptions();
+        drawMap();
+      });
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      loadMapData();
     });
   </script>
 </body>
