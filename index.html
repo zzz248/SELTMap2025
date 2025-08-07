@@ -57,7 +57,7 @@
         function onEachFeature(feature, layer) {
             layer.on({
                 click: () => {
-                    const stateAbbr = feature.properties.STATE_ABBR || feature.properties.postal || feature.properties.abbr || feature.properties.name;
+                    const stateAbbr = feature.properties.abbr || feature.properties.STATE_ABBR || feature.properties.postal || feature.properties.name;
                     const selectedYear = parseInt(yearSelect.value);
                     const content = getPopupContent(stateAbbr, selectedYear);
                     layer.bindPopup(content).openPopup();
@@ -87,8 +87,8 @@
         }
 
         yearSelect.addEventListener("change", () => {
-            loadData();
-        });
+    // Year changed – popup content will adjust on state click
+});
 
         loadData();
     </script>
