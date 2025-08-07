@@ -3,108 +3,33 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Legislative Activity Map</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
-    #map { height: 95vh; width: 100%; }
-    body { margin: 0; font-family: Arial, sans-serif; }
-    .year-select { position: absolute; top: 10px; left: 10px; z-index: 1000; background: white; padding: 10px; border-radius: 5px; }
+    #map { height: 90vh; width: 100%; }
+    body { font-family: Arial, sans-serif; margin: 0; }
+    #year-select {
+      position: absolute; top: 10px; left: 10px; z-index: 1000;
+      background: white; padding: 6px; border-radius: 4px; box-shadow: 0 0 5px rgba(0,0,0,0.3);
+    }
   </style>
 </head>
 <body>
-  <div class="year-select">
+  <div id="year-select">
     <label for="year">Select Year:</label>
-    <select id="year"></select>
+    <select id="year">
+      ${[...Array(2024 - 2009 + 1).keys()].map(i => `<option value="${i + 2009}">${i + 2009}</option>`).join('')}
+    </select>
   </div>
   <div id="map"></div>
 
-  <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script>
-    const map = L.map('map').setView([37.8, -96], 4);
-
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    let map = L.map("map").setView([37.8, -96], 4);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
-
-    let geojson;
-    let popupData = {};
-    let selectedYear = "2009";
-
-    // Load popup data
-    fetch('popup_summary_by_state_and_year.json')
-      .then(res => res.json())
-      .then(data => {
-        popupData = data;
-        console.log("✅ Popup data loaded");
-        return fetch('us-states.json');
-      })
-      .then(res => res.json())
-      .then(geoData => {
-        console.log("✅ GeoJSON loaded");
-
-        // Get years from popup data
-        const years = [...new Set(popupData.map(entry => entry.Year))].sort();
-        const yearSelect = document.getElementById('year');
-        years.forEach(year => {
-          const option = document.createElement('option');
-          option.value = year;
-          option.text = year;
-          yearSelect.appendChild(option);
-        });
-
-        yearSelect.value = selectedYear;
-        yearSelect.addEventListener('change', function() {
-          selectedYear = this.value;
-          updateMap();
-        });
-
-        function getPopupContent(abbr, year) {
-          const entries = popupData.filter(e => e.State === abbr && e.Year.toString() === year.toString());
-          if (entries.length === 0) {
-            return `<strong>${abbr} – ${year}</strong><br>No activity<br>Available Forms: Unknown`;
-          }
-          const entry = entries[0];
-          return `<strong>${abbr} – ${year}</strong><br>${entry.EmojiActivity}<br>Available Forms: ${entry.AvailableForms}`;
-        }
-
-        function styleFeature(feature) {
-          return {
-            fillColor: "#cccccc",
-            weight: 1,
-            opacity: 1,
-            color: 'white',
-            dashArray: '3',
-            fillOpacity: 0.7
-          };
-        }
-
-        function onEachFeature(feature, layer) {
-          const abbr = feature.properties.abbr;
-          const popupContent = getPopupContent(abbr, selectedYear);
-          layer.bindPopup(popupContent);
-          layer.on({
-            mouseover: function (e) {
-              e.target.openPopup();
-            },
-            mouseout: function (e) {
-              e.target.closePopup();
-            }
-          });
-        }
-
-        function updateMap() {
-          if (geojson) {
-            geojson.clearLayers();
-          }
-          geojson = L.geoJson(geoData, {
-            style: styleFeature,
-            onEachFeature: onEachFeature
-          }).addTo(map);
-        }
-
-        updateMap();
-      });
   </script>
 </body>
 </html>
